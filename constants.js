@@ -61,7 +61,6 @@ export const ICON_TYPES = {
 export const ICON_CLASS_MAP = {
     [ICON_TYPES.ROCKET]: 'fa-rocket',
     [ICON_TYPES.COMMENT]: 'fa-palette',
-    [ICON_TYPES.SPARKLES]: 'fa-sparkles',
     [ICON_TYPES.STAR]: 'fa-star-and-crescent',
     [ICON_TYPES.BOLT]: 'fa-star-of-david',
     [ICON_TYPES.CUSTOM]: '',  // 自定义图标不使用FontAwesome类
