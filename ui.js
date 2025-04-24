@@ -48,7 +48,7 @@ export function createMenuElement() {
     const chatTitle = document.createElement('div');
     chatTitle.id = `${Constants.ID_CHAT_LIST_CONTAINER}-title`; // ID for aria-labelledby
     chatTitle.className = Constants.CLASS_LIST_TITLE;
-    chatTitle.textContent = '聊天快速回复';
+    chatTitle.textContent = '聊天快速回复'; // Title includes standard and JS Runner replies now
 
     const chatItems = document.createElement('div');
     chatItems.id = Constants.ID_CHAT_ITEMS; // Container for chat items
@@ -84,7 +84,8 @@ export function createMenuElement() {
 
 /**
  * Creates a single quick reply item (button).
- * @param {object} reply - The quick reply data { setName, label, message }
+ * Adds data-is-standard attribute based on reply data.
+ * @param {object} reply - The quick reply data { setName, label, message, isStandard }
  * @returns {HTMLButtonElement} The button element for the quick reply item.
  */
 export function createQuickReplyItem(reply) {
@@ -94,10 +95,20 @@ export function createQuickReplyItem(reply) {
     item.setAttribute('role', Constants.ARIA_ROLE_MENUITEM);
     item.dataset.setName = reply.setName; // Store data needed for trigger
     item.dataset.label = reply.label;
+
+    // ***************************************************************
+    // --- 新增：添加 isStandard 数据属性，用于区分点击行为 ---
+    // dataset 属性值必须是字符串，所以显式转换布尔值
+    // 如果 reply.isStandard 是 false，则设置为 'false'；否则（包括 true 和 undefined），设置为 'true'
+    item.dataset.isStandard = String(reply.isStandard === false ? false : true);
+    // ***************************************************************
+
     // Tooltip showing full message or first 50 chars
-    item.title = reply.message.length > 50
-        ? `${reply.setName} > ${reply.label}:\n${reply.message.slice(0, 50)}...`
-        : `${reply.setName} > ${reply.label}:\n${reply.message}`;
+    // Use reply.message directly, api.js provides a default if needed
+    const tooltipMessage = reply.message || '(点击执行)'; // Fallback tooltip message if none provided
+    item.title = tooltipMessage.length > 50
+        ? `${reply.setName} > ${reply.label}:\n${tooltipMessage.slice(0, 50)}...`
+        : `${reply.setName} > ${reply.label}:\n${tooltipMessage}`;
     item.textContent = reply.label; // Display label as button text
 
     // Event listener will be added in renderQuickReplies where this is used
@@ -109,8 +120,8 @@ export function createQuickReplyItem(reply) {
 /**
  * Renders fetched quick replies into the respective menu containers.
  * Also attaches click listeners to the newly created items.
- * @param {Array<object>} chatReplies - Chat-specific quick replies
- * @param {Array<object>} globalReplies - Global quick replies
+ * @param {Array<object>} chatReplies - Chat-specific quick replies (includes standard and JS runner)
+ * @param {Array<object>} globalReplies - Global quick replies (standard only)
  */
 export function renderQuickReplies(chatReplies, globalReplies) {
     const { chatItemsContainer, globalItemsContainer } = sharedState.domElements;
@@ -125,10 +136,11 @@ export function renderQuickReplies(chatReplies, globalReplies) {
 
     // Helper function to create and append item with listener
     const addItem = (container, reply) => {
-        const item = createQuickReplyItem(reply);
+        const item = createQuickReplyItem(reply); // createQuickReplyItem now adds data-is-standard
+        // Attach the single click handler from events.js (exposed via window.quickReplyMenu)
         item.addEventListener('click', function(event) {
-            // Use the globally exposed handler from index.js
             if (window.quickReplyMenu && window.quickReplyMenu.handleQuickReplyClick) {
+                // The handler in events.js will read data-is-standard and decide the action
                 window.quickReplyMenu.handleQuickReplyClick(event);
             } else {
                 console.error(`[${Constants.EXTENSION_NAME}] handleQuickReplyClick not found on window.quickReplyMenu`);
@@ -137,14 +149,14 @@ export function renderQuickReplies(chatReplies, globalReplies) {
         container.appendChild(item);
     };
 
-    // Render chat replies or placeholder
+    // Render chat replies or placeholder (includes standard and JS Runner items)
     if (chatReplies && chatReplies.length > 0) {
         chatReplies.forEach(reply => addItem(chatItemsContainer, reply));
     } else {
-        chatItemsContainer.appendChild(createEmptyPlaceholder('没有可用的聊天快速回复'));
+        chatItemsContainer.appendChild(createEmptyPlaceholder('没有可用的聊天快速回复或脚本'));
     }
 
-    // Render global replies or placeholder
+    // Render global replies or placeholder (standard only)
     if (globalReplies && globalReplies.length > 0) {
         globalReplies.forEach(reply => addItem(globalItemsContainer, reply));
     } else {
@@ -179,13 +191,13 @@ export function updateMenuVisibilityUI() {
 
     if (show) {
         // Update content *before* showing
-        console.log(`[${Constants.EXTENSION_NAME}] Opening menu, fetching replies...`);
+        console.log(`[${Constants.EXTENSION_NAME}] Opening menu, fetching replies (including JS Runner)...`);
         try {
-            const { chat, global } = fetchQuickReplies(); // From api.js
+            const { chat, global } = fetchQuickReplies(); // From api.js (now includes JS runner in chat)
              if (chat === undefined || global === undefined) {
                  throw new Error("fetchQuickReplies did not return expected structure.");
              }
-            renderQuickReplies(chat, global); // From this file
+            renderQuickReplies(chat, global); // From this file (will render both types)
         } catch (error) {
              console.error(`[${Constants.EXTENSION_NAME}] Error fetching or rendering replies:`, error);
              // Display an error message within the menu containers
